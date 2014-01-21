@@ -3,6 +3,7 @@ var join = require('path').join;
 var fs = require('fs');
 var path = require('path');
 var request = require('request');
+var easyimage = require('easyimage');
 
 module.exports = function(app, useCors) {
   var rasterizerService = app.settings.rasterizerService;
@@ -23,6 +24,14 @@ module.exports = function(app, useCors) {
     ['width', 'height', 'clipRect', 'javascriptEnabled', 'loadImages', 'localToRemoteUrlAccessEnabled', 'userAgent', 'userName', 'password', 'delay'].forEach(function(name) {
       if (req.param(name, false)) options.headers[name] = req.param(name);
     });
+
+    // Our own addition to scalecrop the resulting screenshot. This enforces a fixed image size, regardless of
+    // the screnshotted site. This is useful for thumbnails.
+    if (req.param("scalecrop")) {
+      options.postprocessing = {
+        scalecrop: JSON.parse(req.param("scalecrop"))
+      }
+    }
 
     var filename = 'screenshot_' + utils.md5(url + JSON.stringify(options)) + '.png';
     options.headers.filename = filename;
@@ -58,7 +67,7 @@ module.exports = function(app, useCors) {
   }
 
   var processImageUsingRasterizer = function(rasterizerOptions, filePath, res, url, callback) {
-    if (url) {
+	if (url) {
       // asynchronous
       res.send('Will post screenshot to ' + url + ' when processed');
       callRasterizer(rasterizerOptions, function(error) {
@@ -81,7 +90,46 @@ module.exports = function(app, useCors) {
         rasterizerService.restartService();
         return callback(new Error(body));
       }
-      callback(null);
+
+      var scalecrop = (rasterizerOptions.postprocessing || {}).scalecrop
+      if (scalecrop) {
+        var filePath = join(rasterizerService.getPath(), rasterizerOptions.headers.filename);
+
+        easyimage.info(filePath, function (name, info) {
+          // Calculate target scaling dimensions. This ensures the scaled
+          // image will be at least the size of the requested output
+          // dimensions. It will be either up- or downscaled.
+          var targetScale;
+          if (info.width < info.height) {
+            targetScale = {
+              width: info.width / (info.width / scalecrop.width),
+              height: info.height / (info.width / scalecrop.width)
+            }
+          } else {
+            targetScale = {
+              width: info.width / (info.height / scalecrop.height),
+              height: info.height / (info.height / scalecrop.height)
+            }
+          }
+
+          // After scaling, we crop the top-left part of the image out, to achieve the
+          // final image size to fit the requested size.
+          easyimage.rescrop({
+            src: filePath,
+            dst: filePath,
+            width: targetScale.width,
+            height: targetScale.height,
+            gravity: "NorthWest",
+            cropwidth: scalecrop.width,
+            cropheight: scalecrop.height
+          }, function () {
+            callback(null);
+          });
+        });
+
+      } else {
+        callback(null);
+      }
     });
   }
 

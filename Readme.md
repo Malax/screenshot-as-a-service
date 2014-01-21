@@ -4,7 +4,7 @@ A simple screenshot web service powered by [Express](http://expressjs.com) and [
 
 ## Setup
 
-First [install](http://code.google.com/p/phantomjs/wiki/Installation) phantomjs, then clone this repo and install the deps:
+First [install](http://code.google.com/p/phantomjs/wiki/Installation) phantomjs and imagemagick, then clone this repo and install the deps:
 
 ```
 $ npm install

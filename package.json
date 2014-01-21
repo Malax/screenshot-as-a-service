@@ -9,5 +9,8 @@
     "express": "3.x",
     "config": "0.4.15",
     "request": "2.9.153"
+  },
+  "devDependencies": {
+    "easyimage": "~0.1.6"
   }
 }
